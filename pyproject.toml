@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "perturb-seq-workflow"
+version = "0.2.0"
+description = "Auditable multi-condition Perturb-seq preprocessing"
+requires-python = ">=3.10"
+dependencies = [
+  "anndata>=0.10",
+  "h5py>=3.8",
+  "numpy>=1.24",
+  "pandas>=2.0",
+  "pyyaml>=6",
+  "scipy>=1.10",
+]
+
+[project.optional-dependencies]
+analysis = ["scanpy>=1.10", "scrublet>=0.2"]
+test = ["pytest>=7"]
+
+[project.scripts]
+perturb-seq = "perturb_seq.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["perturb_seq*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
