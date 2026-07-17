@@ -1,9 +1,28 @@
 # Perturb-Seq Workflow
 
-Auditable preprocessing for pooled Perturb-seq experiments with multiple treatment
-conditions and expected same-target dual-guide designs. The workflow creates a true
-unfiltered ingestion snapshot, explicit QC decisions, filtered count and normalized
-layers, synchronized guide counts, and sparse downstream exports.
+Auditable, five-stage analysis for pooled Perturb-seq experiments with multiple
+treatment conditions and expected same-target dual-guide designs. Each stage has a
+small Python API so it can be run separately, inspected, and resumed.
+
+## Analysis stages
+
+1. **Preprocessing** (`perturb_seq.preprocessing`): optionally run Cell Ranger
+   from FASTQs with `count_fastqs`, then turn 10x feature matrices into the QC'd
+   expression matrix with `prepare_expression_matrix`.
+2. **Metadata clean-up** (`perturb_seq.metadata`): standardize spelling and case
+   variants with `clean_metadata` and annotate recognized vehicle/control versus
+   treatment conditions.
+3. **Pseudobulk and association** (`perturb_seq.pseudobulk`): sum raw counts by
+   biological sample, condition, and perturbation with `make_pseudobulk`, then run
+   an explicitly named treatment-versus-reference comparison with
+   `association_test`.
+4. **Functional analysis** (`perturb_seq.functional`): use `overrepresentation`
+   to test significant association genes against user-provided gene sets.
+5. **Visualization** (`perturb_seq.visualization`): create a reproducible volcano
+   plot with `plot_volcano`. Install the `analysis` extra for plotting support.
+
+`perturb_seq.analyses` re-exports all of these public functions for convenient
+notebook imports; implementation remains separated by stage.
 
 ## Input contract
 
@@ -26,13 +45,68 @@ The guide annotation is a TSV/CSV with these columns:
 ## Run
 
 ```bash
-python -m pip install -e .
+python -m pip install -e '.[analysis]'
 perturb-seq preprocess config.yaml
 ```
 
-The pipeline intentionally does not run differential expression. When biological
-replicates are absent, drug, knockdown, and interaction results must be described as
-exploratory rather than treated as replicated inference.
+For FASTQ inputs, run Cell Ranger before matrix preprocessing:
+
+```python
+from perturb_seq.analyses import count_fastqs
+
+matrix_h5 = count_fastqs(
+    {
+        "input_id": "rapamycin_rep1",
+        "fastqs": "data/fastqs/rapamycin_rep1",
+        "transcriptome": "references/refdata-gex-GRCh38",
+        "sample": "rapamycin_rep1",
+        "localcores": 8,
+    },
+    "cellranger_runs",
+)
+```
+
+Put the returned path in that input's `matrix_h5` field. Cell Ranger must be
+installed separately and available on `PATH`.
+
+The remaining stages can then consume the final H5AD without rerunning Cell
+Ranger or QC:
+
+```python
+import anndata as ad
+from perturb_seq.analyses import (
+    association_test,
+    clean_metadata,
+    make_pseudobulk,
+    overrepresentation,
+    plot_volcano,
+)
+
+cells = ad.read_h5ad("results/02_final/final_expression.h5ad")
+cells = clean_metadata(cells, {"rapa": "Rapamycin", "dmso": "DMSO"})
+
+# input_id should identify a biological replicate, not merely a treatment label.
+pseudobulk = make_pseudobulk(cells)
+associations = association_test(
+    pseudobulk, condition="Rapamycin", reference="DMSO"
+)
+associations.to_csv("results/03_association/rapamycin_vs_dmso.tsv", sep="\t", index=False)
+
+gene_sets = {"example_pathway": ["GENE1", "GENE2", "GENE3"]}
+enrichment = overrepresentation(associations, gene_sets)
+enrichment.to_csv("results/04_functional/enrichment.tsv", sep="\t", index=False)
+plot_volcano(associations, "results/05_visualization/volcano.png")
+```
+
+Association testing uses Welch's test on log-CPM values when both conditions
+have at least two pseudobulk samples and reports Benjamini-Hochberg adjusted
+p-values. With fewer replicates, effect sizes are still returned but p-values
+are set to 1; these outputs are descriptive rather than inferential. Provide
+one distinct `input_id` per true biological replicate and avoid treating cells
+as independent replicates.
+
+When biological replicates are absent, drug, knockdown, and interaction results
+must be described as exploratory rather than treated as replicated inference.
 
 ## Output contract
 

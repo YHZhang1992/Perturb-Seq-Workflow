@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-analysis = ["scanpy>=1.10", "scrublet>=0.2"]
+analysis = ["scanpy>=1.10", "scrublet>=0.2", "matplotlib>=3.7"]
 test = ["pytest>=7"]
 
 [project.scripts]
