@@ -1,0 +1,27 @@
+inputs:
+  - input_id: dmso
+    condition: DMSO
+    cell_source: pooled_cells
+    matrix_h5: data/dmso/filtered_feature_bc_matrix.h5
+  - input_id: rapamycin
+    condition: Rapamycin
+    cell_source: pooled_cells
+    matrix_h5: data/rapamycin/filtered_feature_bc_matrix.h5
+guide_annotation: metadata/guide_annotation.tsv
+output_dir: results
+random_seed: 42
+qc:
+  min_genes: 200
+  min_rna_umi: 500
+  max_mito_percent: 20
+  max_ribo_percent: 50
+  max_detected_guides: 4
+  exclude_doublets: true
+guides:
+  min_umi: 2
+  min_fraction: 0.1
+  min_confidence: 0.7
+genes:
+  min_cells: 3
+  min_fraction: 0.001
+  min_group_cells: 1
