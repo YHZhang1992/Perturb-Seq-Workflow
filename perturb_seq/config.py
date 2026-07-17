@@ -23,6 +23,14 @@ DEFAULTS: dict[str, Any] = {
     "guides": {"min_umi": 2, "min_fraction": 0.1, "min_confidence": 0.7},
     "genes": {"min_cells": 3, "min_fraction": 0.0, "min_group_cells": 1},
     "normalization": {"target_sum": 10_000.0},
+    "analysis": {
+        "enabled": True,
+        "min_cells_per_group": 2,
+        "assignment_set": "primary",
+        "low_confidence_action": "exclude",
+        "n_programs": 5,
+        "network_min_correlation": 0.7,
+    },
 }
 
 

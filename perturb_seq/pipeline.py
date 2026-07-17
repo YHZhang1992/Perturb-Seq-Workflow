@@ -13,6 +13,7 @@ import scipy
 from scipy import sparse
 
 from . import __version__
+from .analysis import run_analysis
 from .config import load_config
 from .export import export_final
 from .guides import assign_guides, read_guide_annotation
@@ -30,7 +31,7 @@ def run_preprocessing(config_path: str | Path) -> dict:
     # Step 1: Read the experiment settings and create one folder per major stage.
     cfg = load_config(config_path)
     out = Path(cfg.get("output_dir", "results"))
-    for stage in ("00_ingestion", "01_qc", "02_final"):
+    for stage in ("00_ingestion", "01_qc", "02_final", "03_analysis"):
         (out / stage).mkdir(parents=True, exist_ok=True)
     # Step 2: Combine the input libraries and separate RNA from guide counts.
     rna, guides, alignment = ingest_inputs(cfg["inputs"])
@@ -80,4 +81,6 @@ def run_preprocessing(config_path: str | Path) -> dict:
     })
     # Step 7: Export synchronized matrices, metadata, and file checksums.
     manifest = export_final(rna, guides, out / "02_final")
+    if cfg["analysis"].get("enabled", True):
+        manifest["analysis"] = run_analysis(rna, out / "03_analysis", cfg["analysis"])
     return manifest
