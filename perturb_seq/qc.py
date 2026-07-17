@@ -8,6 +8,7 @@ from scipy import sparse
 
 
 def validate_counts(x: sparse.spmatrix) -> None:
+    """Confirm that a matrix contains plausible raw molecule counts."""
     data = sparse.csr_matrix(x).data
     if not np.isfinite(data).all():
         raise ValueError("count matrix contains nonfinite values")
@@ -16,10 +17,17 @@ def validate_counts(x: sparse.spmatrix) -> None:
 
 
 def add_cell_qc(adata, guide_adata, guide_assignments: pd.DataFrame, params: dict) -> pd.DataFrame:
-    """Add metrics and flags before any cells are removed; return the audit log."""
+    """Measure cell quality and explain every exclusion in an audit table.
+
+    This function only annotates cells; it does not remove them. That separation
+    ensures the original cells and all pass/fail decisions remain inspectable.
+    """
+    # Step 1: Calculate each cell's total RNA molecules and detected genes.
     x = sparse.csr_matrix(adata.X)
     totals = np.asarray(x.sum(axis=1)).ravel()
     detected = np.diff(x.indptr)
+    # Step 2: Identify mitochondrial and ribosomal genes by standard symbols.
+    # High fractions can indicate damaged or stressed cells and low-quality RNA.
     symbols = adata.var["gene_symbol"].astype(str)
     mito = symbols.str.upper().str.startswith("MT-").to_numpy()
     ribo = symbols.str.upper().str.match(r"^RP[SL]").to_numpy()
@@ -28,6 +36,7 @@ def add_cell_qc(adata, guide_adata, guide_assignments: pd.DataFrame, params: dic
     adata.obs["n_genes_by_counts"] = detected
     adata.obs["mitochondrial_percent"] = np.divide(sum_mask(mito) * 100, totals, out=np.zeros_like(totals, dtype=float), where=totals > 0)
     adata.obs["ribosomal_percent"] = np.divide(sum_mask(ribo) * 100, totals, out=np.zeros_like(totals, dtype=float), where=totals > 0)
+    # Step 3: Attach the guide call for each cell in the same row order.
     for column in guide_assignments:
         adata.obs[column] = guide_assignments[column].to_numpy()
     # A deterministic fallback flag is explicit; callers can replace it with Scrublet output.
@@ -35,6 +44,7 @@ def add_cell_qc(adata, guide_adata, guide_assignments: pd.DataFrame, params: dic
         adata.obs["doublet_score"] = np.nan
         adata.obs["predicted_doublet"] = False
         adata.obs["doublet_method"] = "not_run"
+    # Step 4: Make one readable Boolean flag for every configured QC threshold.
     q = params
     adata.obs["pass_min_rna_umi"] = totals >= q["min_rna_umi"]
     adata.obs["pass_min_genes"] = detected >= q["min_genes"]
@@ -43,11 +53,13 @@ def add_cell_qc(adata, guide_adata, guide_assignments: pd.DataFrame, params: dic
     adata.obs["pass_ribo"] = adata.obs.ribosomal_percent <= q["max_ribo_percent"]
     adata.obs["pass_guide_burden"] = adata.obs.n_detected_guides <= q["max_detected_guides"]
     adata.obs["pass_doublet"] = ~adata.obs.predicted_doublet if q.get("exclude_doublets", True) else True
+    # Step 5: A cell passes overall only when it passes every individual check.
     flags = [c for c in adata.obs if c.startswith("pass_")]
     adata.obs["final_cell_qc_status"] = np.where(adata.obs[flags].all(axis=1), "pass", "fail")
     adata.obs["cell_qc_exclusion_reason"] = adata.obs.apply(
         lambda row: ";".join(c.removeprefix("pass_") for c in flags if not bool(row[c])), axis=1
     )
+    # Step 6: Return a compact decision log suitable for inspection in a table.
     log_columns = ["barcode_original", "input_id", "condition", *flags, "final_cell_qc_status", "cell_qc_exclusion_reason"]
     log = adata.obs[log_columns].copy()
     log.insert(0, "cell_id", adata.obs_names)
@@ -55,17 +67,25 @@ def add_cell_qc(adata, guide_adata, guide_assignments: pd.DataFrame, params: dic
 
 
 def gene_filter(adata, params: dict, target_genes: set[str]) -> tuple[np.ndarray, pd.DataFrame]:
+    """Select informative genes while preserving genes targeted by the experiment."""
+    # Step 1: Count how many retained cells have a non-zero value for each gene.
     x = sparse.csc_matrix(adata.X)
     detected = np.diff(x.indptr)
     fraction = detected / max(adata.n_obs, 1)
+    # Step 2: Measure support within each condition-by-perturbation group, not only
+    # across the experiment as a whole.
     group_support = np.zeros(adata.n_vars, dtype=int)
     groups = adata.obs[["condition", "assigned_target"]].astype(str).agg("|".join, axis=1)
     for group in groups.unique():
         group_support = np.maximum(group_support, np.asarray((x[groups == group] > 0).sum(axis=0)).ravel())
+    # Step 3: Mark explicitly targeted genes so they remain available for plots
+    # and biological annotation even if knockdown makes them rarely detected.
     target = adata.var.gene_symbol.astype(str).isin(target_genes).to_numpy()
     prevalence = (detected >= params["min_cells"]) & (fraction >= params["min_fraction"])
+    # Statistical testing requires adequate overall and within-group detection.
     testing = prevalence & (group_support >= params["min_group_cells"])
     annotation = prevalence | target
+    # Step 4: Store all decisions beside the genes for a transparent audit trail.
     adata.var["detection_count"] = detected
     adata.var["detection_fraction"] = fraction
     adata.var["max_group_detection_count"] = group_support
