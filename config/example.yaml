@@ -1,0 +1,33 @@
+# Paths may be absolute or relative to the directory from which the command runs.
+run_id: example_perturb_seq
+fastq_dir: /data/fastqs
+sample: PERTURB1
+transcriptome: /references/refdata-gex-GRCh38-2024-A
+feature_reference: /data/references/guide_features.csv
+work_dir: work
+output_dir: results/example_perturb_seq
+
+# Optional: use an existing Cell Ranger matrix and skip `count`.
+# matrix_h5: work/example_perturb_seq/outs/filtered_feature_bc_matrix.h5
+
+cellranger:
+  localcores: 16
+  localmem: 64
+  expect_cells: 10000
+  # chemistry: auto
+
+analysis:
+  controls: [NTC_1, NTC_2]
+  min_guide_umis: 3
+  guide_ratio: 3.0
+  min_genes: 200
+  max_genes: 7500
+  max_mito_pct: 20.0
+  min_cells_per_gene: 3
+  min_cells_per_group: 20
+  target_sum: 10000
+  n_hvgs: 3000
+  n_pcs: 40
+  n_neighbors: 15
+  leiden_resolution: 0.8
+  random_seed: 0
