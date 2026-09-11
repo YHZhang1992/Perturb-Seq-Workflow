@@ -25,3 +25,14 @@ genes:
   min_cells: 3
   min_fraction: 0.001
   min_group_cells: 1
+analysis:
+  enabled: true
+  # Primary uses high-confidence expected dual-guide and NTC cells. Use
+  # sensitivity to additionally include high-confidence single-guide cells.
+  assignment_set: primary
+  min_cells_per_group: 2
+  # Alternative: confidence_weight retains interpretable low-confidence calls
+  # and weights their contribution by guide_assignment_confidence.
+  low_confidence_action: exclude
+  n_programs: 5
+  network_min_correlation: 0.7

@@ -1,6 +1,6 @@
 # Perturb-Seq Workflow
 
-Auditable preprocessing for pooled Perturb-seq experiments with multiple treatment
+Auditable preprocessing and analysis for pooled Perturb-seq experiments with multiple treatment
 conditions and expected same-target dual-guide designs. The workflow creates a true
 unfiltered ingestion snapshot, explicit QC decisions, filtered count and normalized
 layers, synchronized guide counts, and sparse downstream exports.
@@ -45,11 +45,23 @@ Outputs are stage-specific:
 * `02_final/guide_counts.h5ad`: guide counts in exactly the same retained-cell order.
 * `02_final/`: gzipped Matrix Market counts/log1p matrices, barcodes, gene and cell
   metadata, guide assignments, and a checksum-bearing `matrix_manifest.json`.
+* `03_analysis/`: target-expression efficiency estimates, condition-matched
+  perturbation effects with BH FDR, data-driven gene-program loadings/scores,
+  candidate response-correlation network edges, and an analysis summary.
 
 The assignment classes are `no_guide_or_unassigned`, `non_targeting_control`,
 `single_guide_targeting`, `expected_same_target_dual`, `ambiguous_assignment`,
 `unexpected_multi_target`, and `guide_multiplet`. Intended pairs are determined from
 the guide map, not from an inappropriate top/second-guide dominance ratio.
+
+Effects are always compared with non-targeting guide cells from the same condition.
+By default, low-confidence assignments are excluded; `analysis.low_confidence_action:
+confidence_weight` instead retains interpretable calls and weights group means by
+assignment confidence. `assignment_set: sensitivity` includes high-confidence
+single-guide cells. The network output reports associations between response
+profiles and must not be interpreted as causal regulation. Pathway labels are not
+invented: the workflow produces data-driven programs that can subsequently be
+tested against a user-selected, species-appropriate pathway database.
 
 ## QC and interpretation
 
